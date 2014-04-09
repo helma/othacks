@@ -1,6 +1,7 @@
 #!/usr/bin/Rscript
 library("seriation")
-sim = read.csv("/tmp/ot/sim.csv",FALSE)
+args <- commandArgs(trailingOnly = TRUE)
+sim = read.csv(paste(args[1],"sim.csv",sep="/"),FALSE)
 sim <- as.dist(sim)
 #sort <- seriate(sim)
 sort <- seriate(sim,"TSP")
