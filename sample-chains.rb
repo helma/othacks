@@ -6,6 +6,6 @@ converter = Converter.new ARGV[0], "-d vamp:qm-vamp-plugins:qm-similarity"
 
 converter.check
 converter.analyze
-converter.sort
 converter.select
+converter.sort
 converter.render_chain

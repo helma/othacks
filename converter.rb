@@ -2,33 +2,6 @@
 require 'fileutils'
 require 'csv'
 
-# remove size equally spaced elements from array
-# http://stackoverflow.com/questions/5250285/how-to-remove-equally-spaced-elements-from-an-array-with-length-of-n-to-match
-# Alternative:
-# http://stackoverflow.com/questions/5250285/how-to-remove-equally-spaced-elements-from-an-array-with-length-of-n-to-match
-class Array
-  def pare size
-    new = Array.new size
-    n2 = self.length - 2
-    m2 = size - 2
-    new[0] = self[0]
-    i = 0
-    j = 0
-    while (j < n2) do
-      diff = (i+1)*n2 - (j+1)*m2
-      if (diff < n2/2)
-        i += 1
-        j += 1
-        new[i] = self[j]
-      else
-        j += 1
-      end
-    end
-    new[m2+1] = self[n2+1]
-    new
-  end
-end
-
 class Converter
 
   def initialize dir, vamp="-d vamp:qm-vamp-plugins:qm-similarity" # Timbre similarity by default
@@ -39,6 +12,7 @@ class Converter
     @normdir = File.join @tmp, "norm"
     @monodir = File.join @tmp, "mono"
     @simdir = File.join @tmp, "sim"
+    @simfile = File.join(@simdir,"sim.csv")
     @slicedir = File.join @tmp, "slice"
     [@normdir,@monodir,@simdir,@slicedir].each{|d| FileUtils.mkdir_p d}
     @vamp = vamp
@@ -48,49 +22,50 @@ class Converter
     `soxi #{file} |grep Duration|cut -d '=' -f2|sed  's/samples//'|tr -d " "`.to_i
   end
 
+  def nr_slices file
+    #`soxi #{file} |grep Duration|cut -d '=' -f1|cut -d ':' -f2-|tr -d " "`
+    nr_samples(file)/44100.0
+  end
+
   def check
-    puts "check ..."
+    puts "checking samples in #{@dir}"
     sizes = @samples.collect{|f| nr_samples f}.uniq
     exit "unequal sample sizes #{sizes.inspect}" unless sizes.size == 1
     @length = sizes.first
   end
 
   def analyze 
-    puts "analyze ..."
+    puts "analyzing and normalizing samples in #{@dir}"
     @norm_samples = []
     mono_samples = []
-    @similarities = []
+    File.exists?(@simfile) ? @similarities = CSV.read(@simfile,{:converters => [:float]}) : @similarities = []
     @samples.each_with_index do |f,i|
       norm = File.join @normdir, File.basename(f)
-      mono = File.join @monodir, File.basename(f) 
       @norm_samples << norm
-      `sox --norm #{f} #{norm}` unless File.exists?(norm)
-      `sox #{norm} #{mono} remix 1,2` unless File.exists?(mono)
-      @similarities << []
-      @similarities[i][i] = 1.0
-      mono_samples.each_with_index do |m,j|
-        comparison = File.join @simdir,  "#{i}-#{j}.wav"
-        `sox -M #{mono} #{m} #{comparison}` unless File.exists?(comparison)
-        result = `/home/ch/src/sonic-annotator-1.0-linux-amd64/sonic-annotator #{@vamp} -w csv --csv-stdout  #{comparison} 2>/dev/null`
-        sim = result.split("\n").first.split(",")[3].to_f # TODO check for "Rhythm and Timbre"
-        @similarities[i][j] = sim
-        @similarities[j][i] = sim
+      `sox --norm #{f} #{norm}` unless File.exists?(norm) # TODO same perceived loudness
+      unless File.exists?(@simfile)
+        mono = File.join @monodir, File.basename(f) 
+        `sox #{norm} #{mono} remix 1,2` unless File.exists?(mono)
+        @similarities << []
+        @similarities[i][i] = 1.0
+        mono_samples.each_with_index do |m,j|
+          comparison = File.join @simdir,  "#{i}-#{j}.wav"
+          `sox -M #{mono} #{m} #{comparison}` unless File.exists?(comparison)
+          result = `/home/ch/src/sonic-annotator-1.0-linux-amd64/sonic-annotator #{@vamp} -w csv --csv-stdout  #{comparison} 2>/dev/null`
+          sim = result.split("\n").first.split(",")[3].to_f # TODO check for "Rhythm and Timbre"
+          @similarities[i][j] = sim.to_f
+          @similarities[j][i] = sim.to_f
+        end
+        mono_samples << mono
       end
-      mono_samples << mono
     end
-    File.open(File.join(@simdir,"sim.csv"),"w+"){|f| f.puts @similarities.collect{|s| s.join ", "}.join("\n") }
-  end
-
-  def sort
-    puts "sort ..."
-    idx = `./seriation.R #{@simdir}`.split(/\s+/).collect{|i| i.to_i-1}
-    @sorted_samples = idx.collect{|i| @norm_samples[i]}
+    CSV.open(@simfile,"w+") do |csv| 
+      @similarities.each{|row| csv << row}
+    end
   end
 
   def select
-    puts "select ..."
-    # TODO prioritize removal of samples with high similarity
-    nr = case @sorted_samples.size
+    nr = case @norm_samples.size
          when 2 then 2
          when 3 then 3
          when 4..5 then 4
@@ -102,20 +77,42 @@ class Converter
          when 32..47 then 32
          when 48..63 then 48
          when 64..127 then 64
-         else exit("cannot process #{@sorted_sample.size} samples")
+         else exit("cannot process #{@norm_sample.size} samples")
          end
-    @selected_samples = @sorted_samples.pare nr
+    puts "selecting #{nr} from #{@norm_samples.size} samples"
+    # remove most similar samples
+    minsim = @similarities.collect{|s| s.min} #  similarity
+    (@norm_samples.size - nr).times do
+      i = minsim.index minsim.min
+      @norm_samples.delete_at i
+      minsim.delete_at i
+      @similarities.delete_at i
+      @similarities.each{|s| s.delete_at i}
+    end
+    @simfile = File.join(@simdir,"select_sim.csv")
+    CSV.open(@simfile,"w+") do |csv| 
+      @similarities.each{|row| csv << row}
+    end
+  end
+
+  def sort
+    puts "sorting samples"
+    idx = `./seriation.R #{@simfile}`.split(/\s+/).collect{|i| i.to_i-1}
+    @norm_samples = idx.collect{|i| @norm_samples[i]}
   end
 
   def render_chain
-    puts "render ..."
-    chain = File.join @dir, "chain", "#{File.basename(@dir)}_#{@selected_samples.size}.wav"
-    `sox #{@selected_samples.join ' '} #{chain}`
+    chain_dir = File.join @dir, "chain"
+    FileUtils.mkdir_p chain_dir
+    chain = File.join chain_dir, "#{File.basename(@dir)}_#{@norm_samples.size}.wav"
+    puts "rendering #{chain}"
+    `sox #{@norm_samples.join ' '} #{chain}`
   end
 
   def render_matrix
     slice_length = @length/@selected_samples.size
     slices = []
+    # get slice number
     # split samples
     @selected_samples.each do |f|
       slices << []
