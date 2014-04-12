@@ -1,12 +1,18 @@
 #!/bin/env ruby
-require 'fileutils'
 require_relative 'converter.rb'
-require 'csv'
+require_relative 'project.rb'
 
-converter = Converter.new ARGV[0], "-d vamp:qm-vamp-plugins:qm-similarity"
+converter = Converter.new ARGV[0], "timbre-rhythm"
 
-converter.analyze
+converter.split_bars
+converter.normalize
+converter.similarity
 converter.sort
-converter.select
-converter.render_matrix
-converter.render_chain
+files = converter.matrix
+
+if ARGV[1]
+  p=Project.new ARGV[1]
+  p.remove_samples ARGV[0]
+  p.add_matrix files
+  p.save
+end

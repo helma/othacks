@@ -1,0 +1,13 @@
+@prefix xsd:      <http://www.w3.org/2001/XMLSchema#> .
+@prefix vamp:     <http://purl.org/ontology/vamp/> .
+@prefix :         <#> .
+
+:transform a vamp:Transform ;
+    vamp:plugin <http://vamp-plugins.org/rdf/plugins/qm-vamp-plugins#qm-similarity> ;
+    vamp:step_size "2048"^^xsd:int ; 
+    vamp:block_size "4096"^^xsd:int ; 
+    vamp:parameter_binding [
+        vamp:parameter [ vamp:identifier "featureType" ] ;
+        vamp:value "3"^^xsd:float ;
+    ] ;
+    .
