@@ -115,6 +115,7 @@ class Project
         "TYPE" => "FLEX",
         "SLOT" => "%03d" % n,
         "PATH" => rel_path(f),
+        #"TRIM_BARSx100" => 100,
         "BPMx24" => (24*Sample.new(f).bpm).to_i,
         "TSMODE" => "2",
         "LOOPMODE" => "0",

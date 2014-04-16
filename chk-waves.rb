@@ -1,6 +1,6 @@
 #!/bin/env ruby
 require 'yaml'
-require_relative 'array.rb'
+require_relative 'pare.rb'
 
 root = "/media/ot/ISS/AUDIO/waveforms/AKWF_transposed"
 
