@@ -1,14 +1,27 @@
 #!/bin/env ruby
+require 'shellwords'
 require_relative 'sample.rb'
 
 class Converter
 
-  def initialize dir, vamp
-    @dir = dir
-    @name = File.basename(@dir)
-    @samples = Dir[File.join(@dir,"*.wav")].collect{|f| Sample.new f}
+  def initialize patt, vamp
+    @dir = File.dirname(patt)
+    @name = File.basename(@dir)#+"_"+File.basename(patt,".wav").shellescape
+    @samples = Dir[patt].collect{|f| Sample.new f}
     @simfile = File.join "/tmp/ot", @name, "sim", "sim.csv"
     @vamp = vamp
+  end
+
+  def check_bpms
+    bpms = {}
+    @samples.each do |s|
+      bpms[s.bpm.round(2)] ||= []
+      bpms[s.bpm.round(2)] << s.original
+    end
+    unless bpms.keys.size == 1
+      msg = bpms.keys.collect{|bpm| "#{bpm}\n#{bpms[bpm].join("\n")}"}.join "\n"
+      abort "unequal bpms:\n#{msg}"
+    end
   end
 
   def split_bars
@@ -25,7 +38,8 @@ class Converter
 
   def ensure_equal_size
     puts "checking samples in #{@dir}"
-    abort "unequal sample sizes #{sizes.inspect}" unless @samples.collect{|s| s.nr_samples}.uniq.size == 1
+    sizes = @samples.collect{|s| s.nr_samples}.uniq
+    abort "unequal sample sizes #{sizes.inspect}" unless sizes.size == 1
   end
 
   def normalize
@@ -108,11 +122,9 @@ class Converter
     files = []
     16.times do |i|
       slices = @samples.collect{|s| s.slices[i]}
-      puts slices.size
       until [2,4,8,12,16,24,32,48,64].include? slices.size 
         slices << silence(slice_length) # pad with silence
       end
-      puts slices.size
       matrix = File.join matrix_dir, "#{"%03d" % (i+1).to_s}_#{@name}_#{slices.size}.wav"
       puts "rendering #{matrix}"
       `sox #{slices.join ' '} #{matrix}`

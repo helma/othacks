@@ -50,7 +50,7 @@ class Sample
   end
 
   def normalize # TODO same perceived loudness
-    `sox --norm #{@original} #{@norm}` unless File.exists?(@norm)
+    `sox --norm #{@original} -b 24 #{@norm}` unless File.exists?(@norm)
   end
 
   def to_mono

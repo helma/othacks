@@ -62,7 +62,8 @@ class Project
   def save
     bak = File.join @dir, "bak"
     FileUtils.mkdir_p bak
-    FileUtils.mv @file, bak
+    bakfile = File.join(bak,"project.#{Time.now.strftime("%Y%m%d-%H%M%S")}")
+    FileUtils.mv @file, bakfile
     File.open(@file,"w+"){|f| f.puts self.to_s}
   end
 
@@ -86,9 +87,11 @@ class Project
     Pathname.new(path).relative_path_from(Pathname.new(@dir)).to_s
   end
 
-  def remove_samples path
-    pattern = rel_path path
-    @samples -= @samples.select{|s| s["PATH"] and s["PATH"].match(Regexp.new(Regexp.escape(pattern)))}
+  def remove_samples paths
+    paths.each do |path|
+      pattern = rel_path path
+      @samples -= @samples.select{|s| s["PATH"] == pattern}
+    end
   end
 
   def slot_nrs type
