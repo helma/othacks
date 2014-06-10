@@ -2,11 +2,10 @@
 require 'fileutils'
 require 'pathname'
 require 'yaml'
-require_relative "sample.rb"
 
 class Project
 
-  attr_accessor :data
+  attr_accessor :samples
   def initialize dir
 
     @meta = {}
@@ -84,12 +83,13 @@ class Project
   end
 
   def rel_path path
-    Pathname.new(path).relative_path_from(Pathname.new(@dir)).to_s
+    Pathname.new(File.expand_path(path)).relative_path_from(Pathname.new(File.expand_path(@dir))).to_s
   end
 
   def remove_samples paths
     paths.each do |path|
       pattern = rel_path path
+      puts pattern
       @samples -= @samples.select{|s| s["PATH"] == pattern}
     end
   end
@@ -99,7 +99,7 @@ class Project
   end
 
   def free_slots type
-    (1..slot_nrs(type).last).to_a - slot_nrs(type)
+    slot_nrs(type).empty? ? [] : (1..slot_nrs(type).last).to_a - slot_nrs(type)
   end
 
   def next_slot type
@@ -111,15 +111,18 @@ class Project
     "%03d" % s
   end
 
-  def add_matrix files
-    n = next_slot "FLEX"
+  def add_matrix dir
+    files = Dir[File.join(dir,"*.wav")]
+    #n = next_slot "FLEX"
+    n = 1
     files.each do |f|
+      l = File.basename(f,".wav").split(/_/).last.to_f
       @samples << {
         "TYPE" => "FLEX",
         "SLOT" => "%03d" % n,
         "PATH" => rel_path(f),
-        #"TRIM_BARSx100" => 100,
-        "BPMx24" => (24*Sample.new(f).bpm).to_i,
+        "TRIM_BARSx100" => (100*l/8).round, # TODO: correct length
+        #"BPMx24" => (24*Sample.open(f).bpm).to_i,
         "TSMODE" => "2",
         "LOOPMODE" => "0",
         "GAIN" => "48",
@@ -135,12 +138,19 @@ class Project
       "TYPE" => "STATIC",
       "SLOT" => nr,
       "PATH" => rel_path(file),
-      "BPMx24" => (24*Sample.new(file).bpm).to_i,
-      "TSMODE" => "0",
+      #TODO
+      #"BPMx24" => (24*Sample.new(file).bpm).round,
+      "TSMODE" => "1",
       "LOOPMODE" => "0",
       "GAIN" => "48",
       "TRIGQUANTIZATION" => "1"
     }
+  end
+
+  def save_matrix files
+    remove_samples files
+    add_matrix files
+    save
   end
 
 end

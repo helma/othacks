@@ -5,13 +5,3 @@ Quick and dirty command line scripts for [Octatrack](http://www.elektron.se/prod
 
 WARNING: These scripts change (undocumented) Octatrack files and might destroy your work. Read and understand the code, backup and use with care.
 
-Dependencies
-------------
-
-* [sox](http://sox.sourceforge.net/)
-* [R](http://www.r-project.org/) Packages
-  - [tuneR](http://cran.r-project.org/package=tuneR)
-  - [seriation](http://cran.r-project.org/package=seriation)
-* [Sonic Annotator](http://www.vamp-plugins.org/sonic-annotator/)
-* [VAMP Plugins](http://www.vamp-plugins.org/)
-  - [QM Vamp Plugins](http://isophonics.net/QMVampPlugins)
