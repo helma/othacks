@@ -86,13 +86,14 @@ class Project
     Pathname.new(File.expand_path(path)).relative_path_from(Pathname.new(File.expand_path(@dir))).to_s
   end
 
+=begin
   def remove_samples paths
     paths.each do |path|
       pattern = rel_path path
-      puts pattern
       @samples -= @samples.select{|s| s["PATH"] == pattern}
     end
   end
+=end
 
   def slot_nrs type
     slots(type).collect{|s| s["SLOT"].to_i}.sort
@@ -107,24 +108,18 @@ class Project
   end
 
   def first_free_slot type
-    free_slots(type).empty? ? s=next_slot(type) : s=free_slots(type).first
-    "%03d" % s
+    free_slots(type).empty? ? next_slot(type) : free_slots(type).first
   end
 
   def add_matrix dir
-    files = Dir[File.join(dir,"*.wav")]
-    #n = first_free_slot("STATIC")
-    #n = next_slot "FLEX"
-    n = 1
+    files = Dir[File.join(dir,"*.wav")].sort
+    n = first_free_slot("STATIC")
     files.each do |f|
-      #l = File.basename(f,".wav").split(/_/).last.to_f
       bpm = @dir.split('/').grep(/\d\d\d/).first.to_i
       @samples << {
-        #"TYPE" => "FLEX",
         "TYPE" => "STATIC",
         "SLOT" => "%03d" % n,
         "PATH" => rel_path(f),
-        #"TRIM_BARSx100" => (100*l/8).round, # TODO: correct length
         "BPMx24" => (24*bpm).round,
         "TSMODE" => "2",
         "LOOPMODE" => "0",
@@ -136,10 +131,10 @@ class Project
   end
 
   def add_chain file
-    nr = first_free_slot("STATIC")
+    n = first_free_slot("STATIC")
     slot = {
       "TYPE" => "STATIC",
-      "SLOT" => nr,
+      "SLOT" => "%03d" % n,
       "PATH" => rel_path(file),
       "TRIM_BARSx100" => nil,
       "BPMx24" => nil,

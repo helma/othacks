@@ -155,6 +155,7 @@ class Collection < Array
         slices << silence # pad with silence
       end
       matrix = File.join matrix_dir, "#{name}#{"%03d" % (i+1).to_s}_#{slices.size}.wav"
+      puts "rendering #{matrix}"
       `sox "#{slices.join '" "'}" -b 24 "#{matrix}"`
     end
     File.open(File.join(matrix_dir,"#{name}_matrix.txt"),"w+"){|f| f.puts collect{|s| s.name}.join("\n")}
