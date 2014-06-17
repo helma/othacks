@@ -19,8 +19,8 @@ chain_files.compact!
     dir = File.join pdir, i
     if File.directory?(dir)
       puts dir
-      c = Collection.new(dir)
-      c.prepare
+      #c = Collection.new(dir)
+      #c.prepare
       c = Collection.new(dir)
       case i
       when "drums"

@@ -113,16 +113,19 @@ class Project
 
   def add_matrix dir
     files = Dir[File.join(dir,"*.wav")]
+    #n = first_free_slot("STATIC")
     #n = next_slot "FLEX"
     n = 1
     files.each do |f|
-      l = File.basename(f,".wav").split(/_/).last.to_f
+      #l = File.basename(f,".wav").split(/_/).last.to_f
+      bpm = @dir.split('/').grep(/\d\d\d/).first.to_i
       @samples << {
-        "TYPE" => "FLEX",
+        #"TYPE" => "FLEX",
+        "TYPE" => "STATIC",
         "SLOT" => "%03d" % n,
         "PATH" => rel_path(f),
-        "TRIM_BARSx100" => (100*l/8).round, # TODO: correct length
-        #"BPMx24" => (24*Sample.open(f).bpm).to_i,
+        #"TRIM_BARSx100" => (100*l/8).round, # TODO: correct length
+        "BPMx24" => (24*bpm).round,
         "TSMODE" => "2",
         "LOOPMODE" => "0",
         "GAIN" => "48",
@@ -134,23 +137,27 @@ class Project
 
   def add_chain file
     nr = first_free_slot("STATIC")
-    @samples << {
+    slot = {
       "TYPE" => "STATIC",
       "SLOT" => nr,
       "PATH" => rel_path(file),
-      #TODO
-      #"BPMx24" => (24*Sample.new(file).bpm).round,
-      "TSMODE" => "1",
+      "TRIM_BARSx100" => nil,
+      "BPMx24" => nil,
+      "TSMODE" => "2",
       "LOOPMODE" => "0",
       "GAIN" => "48",
       "TRIGQUANTIZATION" => "1"
     }
-  end
-
-  def save_matrix files
-    remove_samples files
-    add_matrix files
-    save
+    if @dir.match(%r{/\d\d\d})
+      bpm = @dir.split('/').grep(/\d\d\d/).first.to_i
+      slot["BPMx24"] = 24*bpm
+      slot.delete("TRIM_BARSx100")
+    else
+      length = File.basename(file,".wav").split(/_/).last.to_i
+      slot["TRIM_BARSx100"] = (100*length/4.0).round
+      slot.delete("BPMx24")
+    end
+    @samples << slot
   end
 
 end
