@@ -5,7 +5,7 @@ class Player
   def initialize sample, loop=nil
     `mkfifo /tmp/mplayer`
     loop ? loop = "-loop 0" : loop = ""
-    pid = spawn "mplayer -idle -slave #{loop} -input file=/tmp/mplayer '#{sample.path}'"
+    pid = spawn "mplayer -idle -slave -input file=/tmp/mplayer '#{sample.path}' #{loop}"
     Process.detach pid
   end
 

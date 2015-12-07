@@ -108,22 +108,21 @@ class Collection < Array
       s.bpm = bpm
       s.bars = 2
     end
-    simsort
+    simsort!
   end
 
   def prepare_singles
-    each{|s| s.trim_silence}
-    max_frames = collect{|s| s.frames}.max
+    max_frames = collect{|s| s.frames_without_silence}.max
     each do |s|
       s.mono2stereo
       s.normalize
-      s.pad max_frames
+      s.frames = max_frames
     end
-    simsort
+    simsort!
   end
 
   def to_chain
-    simsort
+    simsort!
     chain_dir = File.join @dir, "chain"
     FileUtils.mkdir_p chain_dir
     files = collect{|s| s.path}
@@ -142,7 +141,7 @@ class Collection < Array
   end
 
   def to_matrix
-    simsort
+    simsort!
     each{|s| s.slice 16}
     matrix_dir = File.join @dir, "matrix"
     FileUtils.mkdir_p matrix_dir
@@ -196,20 +195,52 @@ class Collection < Array
     duplicate_candidates.each { |d| d.review }
   end
 
+  def simsort!
+    clusters = []
+    cands = duplicate_candidates(0.15)
+    others = self - cands.flatten.uniq
+    cands.each_with_index do |d,i|
+      cluster_idx = nil
+      clusters.each_with_index do |c,n|
+        cluster_idx = n unless (c&d).empty?
+      end
+      cluster_idx ? cluster = clusters[cluster_idx] : cluster = d
+      cands[i+1,cands.size-i+1].each do |d2|
+        unless (cluster & d2).empty?
+          cluster += d2
+        end
+      end
+      cluster_idx ? clusters[cluster_idx] = cluster.uniq : clusters << cluster.uniq
+    end
+    clusters.collect!{|c| c.uniq.size > 2 ? seriate(c.uniq) : c.uniq }
+    clusters << seriate(others.uniq)
+    clusters = (clusters + others.collect{|s| [s]}).flatten
+    sort!{|a,b| clusters.index(a) <=> clusters.index(b)}
+  end
+
 =begin
-  def simsort
-    duplicate_candidates(0.3).flatten.uniq
+  def simsort!
+    FileUtils.mkdir_p "/tmp/ot/"
+    simfile = "/tmp/ot/similarities.csv"
+    CSV.open(simfile,"w+") do |csv|
+      dissimilarity_matrix.each{|row| csv << row}
+    end 
+    idx = `#{File.join __dir__,"seriation.R"} #{simfile}`.split(/\s+/).collect{|i| i.to_i-1}
+    sort!{|a,b| idx[index(a)] <=> idx[index(b)]}
   end
 =end
 
-  def simsort
+  def seriate samples
     FileUtils.mkdir_p "/tmp/ot/"
     simfile = "/tmp/ot/similarities.csv"
-    CSV.open(simfile,"w+") {|csv| dissimilarity_matrix.each{|row| csv << row} }
+    CSV.open(simfile,"w+") do |csv|
+      samples.each do |s|
+        csv << samples.collect{|s2| 1-s.similarity(s2)}
+      end
+    end 
     idx = `#{File.join __dir__,"seriation.R"} #{simfile}`.split(/\s+/).collect{|i| i.to_i-1}
-    idx.collect{|i| self[i]}
+    idx.collect{|i| samples[i]}
   end
-
 
   def loop?
     @dir ||= collect{|s| File.dirname s.path}.uniq.first
@@ -219,7 +250,6 @@ class Collection < Array
   def review
 
     FileUtils.rm Dir[File.join("/tmp/ot",@dir,"*png")] if @dir
-    @player = Player.new self.first, loop?
 
     @keep = []
     @delete = []
@@ -264,7 +294,7 @@ class Collection < Array
       when "e"
         @player.quit
         `sweep "#{self[@current].path}"`
-        @player = Player.new self[@current].path, loop?
+        @player = Player.new self[@current], loop?
       when "s"
         save
       when "space"
@@ -283,6 +313,7 @@ class Collection < Array
     @win.signal_connect("destroy") { quit }
     @win.show_all
     draw
+    goto 0
     Gtk.main
   end
 
@@ -332,20 +363,16 @@ class Collection < Array
   def goto n
     @current = (@current+n) % self.size
     puts self[@current].path
-    #@player.queue self[@current].path
-    #play #self[@current].path
+    @player ||= Player.new self[@current], loop?
     @player.play self[@current]
     draw
   end
 
+=begin
   def play
     @player.file = self[@current].path 
-    #Process.kill @play_pid, "HUP" if @play_pid
-    #@play_pid = fork { Player.new self[@current].path }
-    #Process.detach @play_pid
-    #@play_pid = `ruby /home/ch/src/othacks/play.rb #{self[@current].path}`
-    #puts @play_pid
   end
+=end
 
   def draw
     if (@keep+@delete+@move).collect{|s| s.path}.sort == self.collect{|s| s.path}.sort
@@ -363,6 +390,7 @@ class Collection < Array
           frame.modify_bg(Gtk::STATE_NORMAL,GREEN) if @keep.include? self[n]
           frame.modify_bg(Gtk::STATE_NORMAL,RED) if @delete.include? self[n]
           frame.modify_bg(Gtk::STATE_NORMAL,BLUE) if @move.include? self[n]
+          frame.modify_bg(Gtk::STATE_NORMAL,WHITE) if self[@current].similarity(self[n]) > 0.85
           frame.modify_bg(Gtk::STATE_NORMAL,YELLOW) if n == @current 
         else
           frame.child.pixbuf = nil

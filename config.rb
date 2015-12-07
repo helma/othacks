@@ -4,7 +4,7 @@
   "KICK",
   "SNR",
   "HH",
-  #"PERC",
+  "PERCFX",
   "SUB",
   "BASS",
   "LEAD",
@@ -17,15 +17,15 @@
 @external_chains = Dir.wavs(File.join @basedir, "AUDIO/Tarekith Octatrack Chains/Instrument Chains").sort
 
 @projects = [
-  "086",
+  #"086",
   "098",
-  "114",
+  #"114",
   "120",
-  "124",
+  #"124",
   "128",
   "132",
   "140",
-  "156",
+  #"156",
   "174",
 ]
 

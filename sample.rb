@@ -76,14 +76,14 @@ class Sample
         bak = backup
         input = ""
         times.to_i.times{ input += "'#{bak}' "}
-        `sox #{input} "#{@path}"`
+        `sox -G #{input} "#{@path}"`
         update
       elsif times < 1 and (1/times) == (1/times).to_i
         length = (@frames*times).to_i
         bak = backup
         (0..(1/times).to_i-1).each do |i|
           file = @path.sub(/\.wav/i,"_#{i}.wav")
-          `sox "#{bak}" -b 24 "#{file}" trim #{i*length}s #{length}s`
+          `sox -G "#{bak}" -b 16 "#{file}" trim #{i*length}s #{length}s`
         end
         FileUtils.mv @path, File.dirname(bak)
         puts "#{@path} split into #{1/times} files. recollect samples!"
@@ -101,23 +101,46 @@ class Sample
     end
   end
 
+  def to_mono
+    `sox -G "#{backup}" -b 16 "#{@path}" remix -` if @channels != 1
+  end
+
+  def to_16bit
+    `sox -G "#{backup}" -b 16 "#{@path}"` if @samplerate != 16
+  end
+
+  def trim frames
+    trim_seconds frames/44100.0
+  end
+
   def trim_seconds sec
     unless @seconds <= sec
-      `sox "#{backup}" -b 24 "#{@path}" trim 0 #{sec}`
+      `sox -G "#{backup}" -b 16 "#{@path}" trim 0 #{sec}`
       update
     end
   end
 
+  def silence_start
+    `aubioquiet -i "#{@path}"|grep QUIET|sed 's/QUIET: //'`.split("\n").last.to_f
+  end
+
+  def frames_without_silence
+    silence_start*44100.0
+  end
+
   def trim_silence
-    start = `aubioquiet -i "#{@path}"|grep QUIET|sed 's/QUIET: //'`.split("\n").last
-    trim_seconds(start.to_f+0.05) if start
+    trim_seconds(silence_start+0.05) if silence_start
   end
 
   def pad length
     unless @frames >= length 
-      `sox  "#{backup}" -b 24 "#{@path}" pad #{length - @frames}s@#{@frames}s`
+      `sox -G  "#{backup}" -b 16 "#{@path}" pad #{(length - @frames).round}s@#{@frames}s`
       update
     end
+  end
+
+  def frames= frames
+    frames > @frames ?  pad(frames) : trim(frames)
   end
 
   def name
@@ -146,7 +169,7 @@ class Sample
   def bpm= b
     unless self.bpm == b
       factor = @seconds/(bars.round*4*60/b.to_f)
-      `sox  "#{backup}" -b 24 "#{@path}" tempo #{factor}`
+      `sox -G  "#{backup}" -b 16 "#{@path}" tempo #{factor}`
       update
     end
   end
@@ -157,9 +180,14 @@ class Sample
   end
 
   def bpm
+    if @dir.match(/\d\d\d/)
+      approx_bpm = @dir.split('/').grep(/\d\d\d/).first.to_i
+      approx_bpm < 100 ? thresh = 50 : thresh = 100
+    end
+    thresh ||= 90
     bpm = 44100*60.0/@frames
     n = 1
-    while n*bpm < 90 
+    while n*bpm < thresh
       n*=2 
     end
     n*bpm
@@ -175,7 +203,7 @@ class Sample
 
   def normalize
     unless normalized?
-      `sox --norm "#{backup}" -b 24 "#{@path}"`
+      `sox -G --norm "#{backup}" -b 16 "#{@path}"`
       update
     end
   end
@@ -224,7 +252,7 @@ class Sample
       chop = File.join chopdir, "#{File.basename(@path,".wav")}-#{i}.wav"
       puts chop
       #puts "#{o} #{onsets[i+1]-o}" 
-      `sox "#{@path}" "#{chop}" trim #{o} #{onsets[i+1]-o}` 
+      `sox -G "#{@path}" "#{chop}" trim #{o} #{onsets[i+1]-o}` 
     end
     onsets
 =end
@@ -238,7 +266,7 @@ class Sample
       dir = File.join "/tmp/ot/",@dir,"slice", i.to_s
       FileUtils.mkdir_p dir
       slice = File.join dir, name
-      `sox "#{@path}" "#{slice}" trim #{start}s #{length}s` unless File.exists? slice
+      `sox -G "#{@path}" -b 16 "#{slice}" trim #{start}s #{length}s` unless File.exists? slice
       @slices << slice
       start += length
     end
@@ -246,7 +274,7 @@ class Sample
 
   def self.silence frames
     file = File.join "/tmp", "silence.wav"
-    `sox -n -r 44100 -b 24 -c 2 "#{file}" trim 0 #{frames/44100.0}` # wrong number of samples with sample durations
+    `sox -G -n -r 44100 -b 16 -c 2 "#{file}" trim 0 #{frames/44100.0}` # wrong number of samples with sample durations
     file
   end
 
